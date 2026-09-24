@@ -27,6 +27,11 @@ body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
 .hidden { display: none; }
 .choice { padding: 10px; margin: 8px 0; background: #f0f0f0; cursor: pointer; border-radius: 6px; }
 .choice:hover { background: #e0e0e0; }
+
+/* ★ 6問目の選択済み色 */
+.choice.selected {
+  background: #c8e6c9;
+}
 </style>
 </head>
 
@@ -45,9 +50,9 @@ body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
 
   <p id="question-text"></p>
 
-  <button id="backBtn" class="hidden">戻る</button>
-
+  <!-- ★ 戻るボタンを選択肢の下へ移動 -->
   <div id="answer-buttons"></div>
+  <button id="backBtn" class="hidden">戻る</button>
 
   <button id="finishBtn" class="hidden">結果を見る</button>
 </div>
@@ -141,9 +146,9 @@ function renderQuestion() {
   const q = questions[current];
   document.getElementById("question-text").textContent = q.text;
 
-  // 選択肢生成
   const btns = document.getElementById("answer-buttons");
   btns.innerHTML = "";
+
   q.choices.forEach((c, i) => {
     const b = document.createElement("div");
     b.className = "choice";
@@ -155,8 +160,14 @@ function renderQuestion() {
   // 戻るボタン
   document.getElementById("backBtn").classList.toggle("hidden", current === 0);
 
-  // 結果を見るボタン
-  document.getElementById("finishBtn").classList.toggle("hidden", current !== questions.length - 1);
+  // 結果ボタンの表示制御
+  const finishBtn = document.getElementById("finishBtn");
+  finishBtn.classList.toggle("hidden", current !== questions.length - 1);
+
+  // ★ 6問目は選択するまで押せない
+  if (current === questions.length - 1) {
+    finishBtn.disabled = true;
+  }
 
   updateProgress();
 }
@@ -164,6 +175,24 @@ function renderQuestion() {
 // ====== 回答処理 ======
 function selectChoice(i) {
   const sc = questions[current].choices[i].score;
+
+  // ★ 6問目だけ特別処理
+  if (current === questions.length - 1) {
+    // 選択肢の色変更
+    const btns = document.querySelectorAll("#answer-buttons .choice");
+    btns.forEach(b => b.classList.remove("selected"));
+    btns[i].classList.add("selected");
+
+    // 結果を見るボタンを有効化
+    document.getElementById("finishBtn").disabled = false;
+
+    // スコア加算
+    for (let k in sc) scores[k] += sc[k];
+
+    return; // 自動で次へ進まない
+  }
+
+  // 1〜5問目は従来通り
   for (let k in sc) scores[k] += sc[k];
 
   if (current < questions.length - 1) {
@@ -180,9 +209,6 @@ document.getElementById("backBtn").onclick = () => {
   }
 };
 
-// ====== 結果を見る ======
-document.getElementById("finishBtn").onclick = () => finish();
-
 // ====== 64タイプ → 8タイプ集約 ======
 const groups = [
   { name:"静かなマイペース型", ids:[1,5,17,19,21,23,33,49],
@@ -190,23 +216,22 @@ const groups = [
     tease:"急かされると処理落ちするタイプ",
     strong:"無理に群れず自分のペースを守るブレなさ。",
     weak:"省エネすぎて何考えてるか不明と言われがち。",
-    desc:"安心できる環境でじっくり動くタイプ。" },
-  /* 他の7タイプもここに追加（省略） */
+    desc:"安心できる環境でじっくり動くタイプ。" }
 ];
 
-// ====== 診断結果 ======
+// ====== 結果を見る ======
+document.getElementById("finishBtn").onclick = () => finish();
+
 function finish() {
   document.getElementById("question-area").classList.add("hidden");
   document.getElementById("result-area").classList.remove("hidden");
 
-  // 6ビット → 1〜64
   const keys = ["社交性","自立性","主体性","協調性","柔軟性","自己表現"];
   let bits = keys.map(k => scores[k] >= 0 ? 1 : 0);
   let id = parseInt(bits.join(""), 2) + 1;
 
   let group = groups.find(g => g.ids.includes(id));
 
-  // 結果表示
   document.getElementById("result-title").textContent = group.name;
   document.getElementById("result-one").textContent = group.one;
   document.getElementById("result-tease").textContent = group.tease;
@@ -214,7 +239,6 @@ function finish() {
   document.getElementById("result-weak").textContent = group.weak;
   document.getElementById("result-desc").textContent = group.desc;
 
-  // GAS送信
   fetch(GAS_URL, {
     method:"POST",
     headers:{"Content-Type":"application/json"},
