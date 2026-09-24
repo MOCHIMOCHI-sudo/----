@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>性格診断（普段）</title>
+
+<style>
+body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+
+/* 進捗バー */
+.progress-container {
+  width: 100%;
+  background: #eee;
+  height: 8px;
+  border-radius: 4px;
+  margin: 20px 0;
+}
+.progress-bar {
+  height: 8px;
+  background: #4caf50;
+  width: 0%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+/* 汎用 */
+.hidden { display: none; }
+.choice { padding: 10px; margin: 8px 0; background: #f0f0f0; cursor: pointer; border-radius: 6px; }
+.choice:hover { background: #e0e0e0; }
+</style>
+</head>
+
+<body>
+
+<h1>性格診断（普段）</h1>
+
+<!-- ==========================
+     質問画面
+=========================== -->
+<div id="question-area">
+
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <p id="question-text"></p>
+
+  <button id="backBtn" class="hidden">戻る</button>
+
+  <div id="answer-buttons"></div>
+
+  <button id="finishBtn" class="hidden">結果を見る</button>
+</div>
+
+<!-- ==========================
+     結果画面
+=========================== -->
+<div id="result-area" class="hidden">
+  <h2 id="result-title"></h2>
+  <p id="result-one"></p>
+  <p id="result-tease"></p>
+
+  <button id="detailBtn">詳しく見る</button>
+
+  <div id="detailBox" class="hidden">
+    <p><strong>強み:</strong> <span id="result-strong"></span></p>
+    <p><strong>弱み:</strong> <span id="result-weak"></span></p>
+    <p><strong>説明:</strong> <span id="result-desc"></span></p>
+  </div>
+
+  <button id="shareBtn">共有する</button>
+
+  <p id="result-stats"></p>
+</div>
+
+<!-- ==========================
+     JavaScript
+=========================== -->
+<script>
+// ====== GAS URL ======
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzKPWO_IxlFPwGHWX6T1sMyy1dJhO5qKSSnk-vYa4XUkFX03jn0Gu5EXgfq0nymzHNOzg/exec";
+
+// ====== 質問データ ======
+const questions = [
+  { text: "予定のない休日、どう過ごしたい？",
+    choices: [
+      { text:"一人で自由に", score:{社交性:-2, 自立性:2} },
+      { text:"誰かと", score:{社交性:2, 自立性:-1} },
+      { text:"予定を作る", score:{社交性:1, 自立性:1} }
+    ]
+  },
+  { text:"何かを決めるとき、まずどうする？",
+    choices:[
+      { text:"自分で決める", score:{主体性:2, 協調性:-1} },
+      { text:"人に相談", score:{主体性:0, 協調性:1} },
+      { text:"周囲に合わせる", score:{主体性:-2, 協調性:2} }
+    ]
+  },
+  { text:"急に予定が変わったら？",
+    choices:[
+      { text:"楽しむ", score:{柔軟性:2} },
+      { text:"少し困る", score:{柔軟性:0} },
+      { text:"かなりストレス", score:{柔軟性:-2} }
+    ]
+  },
+  { text:"悩みがあるとき、どうする？",
+    choices:[
+      { text:"自分で考える", score:{自立性:2, 協調性:-1} },
+      { text:"誰かに話す", score:{自立性:0, 協調性:2} },
+      { text:"なるべく考えない", score:{自立性:-1, 自己表現:-1} }
+    ]
+  },
+  { text:"人から褒められたら？",
+    choices:[
+      { text:"素直に喜ぶ", score:{自己表現:2} },
+      { text:"照れる", score:{自己表現:1} },
+      { text:"反応に困る", score:{自己表現:-1} }
+    ]
+  },
+  { text:"自分と違う意見を聞いたら？",
+    choices:[
+      { text:"面白い", score:{柔軟性:2, 協調性:1} },
+      { text:"理由を聞く", score:{柔軟性:1, 協調性:2} },
+      { text:"納得できなければ伝える", score:{柔軟性:-1, 自己表現:2} }
+    ]
+  }
+];
+
+// ====== スコア初期値 ======
+let scores = {社交性:0, 自立性:0, 主体性:0, 協調性:0, 柔軟性:0, 自己表現:0};
+let current = 0;
+
+// ====== 進捗バー ======
+function updateProgress() {
+  const percent = (current / questions.length) * 100;
+  document.getElementById("progressBar").style.width = percent + "%";
+}
+
+// ====== 質問表示 ======
+function renderQuestion() {
+  const q = questions[current];
+  document.getElementById("question-text").textContent = q.text;
+
+  // 選択肢生成
+  const btns = document.getElementById("answer-buttons");
+  btns.innerHTML = "";
+  q.choices.forEach((c, i) => {
+    const b = document.createElement("div");
+    b.className = "choice";
+    b.textContent = c.text;
+    b.onclick = () => selectChoice(i);
+    btns.appendChild(b);
+  });
+
+  // 戻るボタン
+  document.getElementById("backBtn").classList.toggle("hidden", current === 0);
+
+  // 結果を見るボタン
+  document.getElementById("finishBtn").classList.toggle("hidden", current !== questions.length - 1);
+
+  updateProgress();
+}
+
+// ====== 回答処理 ======
+function selectChoice(i) {
+  const sc = questions[current].choices[i].score;
+  for (let k in sc) scores[k] += sc[k];
+
+  if (current < questions.length - 1) {
+    current++;
+    renderQuestion();
+  }
+}
+
+// ====== 戻る ======
+document.getElementById("backBtn").onclick = () => {
+  if (current > 0) {
+    current--;
+    renderQuestion();
+  }
+};
+
+// ====== 結果を見る ======
+document.getElementById("finishBtn").onclick = () => finish();
+
+// ====== 64タイプ → 8タイプ集約 ======
+const groups = [
+  { name:"静かなマイペース型", ids:[1,5,17,19,21,23,33,49],
+    one:"自分の速度で生きる人",
+    tease:"急かされると処理落ちするタイプ",
+    strong:"無理に群れず自分のペースを守るブレなさ。",
+    weak:"省エネすぎて何考えてるか不明と言われがち。",
+    desc:"安心できる環境でじっくり動くタイプ。" },
+  /* 他の7タイプもここに追加（省略） */
+];
+
+// ====== 診断結果 ======
+function finish() {
+  document.getElementById("question-area").classList.add("hidden");
+  document.getElementById("result-area").classList.remove("hidden");
+
+  // 6ビット → 1〜64
+  const keys = ["社交性","自立性","主体性","協調性","柔軟性","自己表現"];
+  let bits = keys.map(k => scores[k] >= 0 ? 1 : 0);
+  let id = parseInt(bits.join(""), 2) + 1;
+
+  let group = groups.find(g => g.ids.includes(id));
+
+  // 結果表示
+  document.getElementById("result-title").textContent = group.name;
+  document.getElementById("result-one").textContent = group.one;
+  document.getElementById("result-tease").textContent = group.tease;
+  document.getElementById("result-strong").textContent = group.strong;
+  document.getElementById("result-weak").textContent = group.weak;
+  document.getElementById("result-desc").textContent = group.desc;
+
+  // GAS送信
+  fetch(GAS_URL, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({ typeId:id, resultCode:bits.join("") })
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("result-stats").textContent =
+      `あなたは ${data.respondentNumber} 番目の回答者です。同じタイプの人は累計 ${data.sameTypeCount} 人いました。`;
+  });
+}
+
+// ====== 詳しく見る ======
+document.getElementById("detailBtn").onclick = () => {
+  document.getElementById("detailBox").classList.toggle("hidden");
+};
+
+// ====== 共有 ======
+document.getElementById("shareBtn").onclick = () => {
+  if (navigator.share) {
+    navigator.share({
+      title:"性格診断（普段）",
+      text:"診断結果を共有します！",
+      url:location.href
+    });
+  } else {
+    alert("共有機能が使えません");
+  }
+};
+
+// 初期表示
+renderQuestion();
+</script>
+
+</body>
+</html>
